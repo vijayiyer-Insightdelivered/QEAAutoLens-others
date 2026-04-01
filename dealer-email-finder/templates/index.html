@@ -195,6 +195,10 @@
                     class="bg-gray-500 hover:bg-gray-600 text-white font-medium px-5 py-2 rounded-lg transition text-sm hidden">
                     Stop
                 </button>
+                <button onclick="resetSelected()" id="btn-reset-selected"
+                    class="border border-navy text-navy hover:bg-blue-50 font-medium px-5 py-2 rounded-lg transition text-sm hidden">
+                    Reset Selected to Pending
+                </button>
                 <button onclick="resetDealers()"
                     class="border border-gray-300 text-gray-600 hover:bg-gray-50 font-medium px-5 py-2 rounded-lg transition text-sm">
                     Reset Errors
@@ -420,7 +424,8 @@ function renderTable(dealers) {
             <td class="px-4 py-3">${emailStr}</td>
             <td class="px-4 py-3 text-xs">${esc(d.company_status || '-')}</td>
             <td class="px-4 py-3 text-right space-x-2">
-                <button onclick="rescrapeDealer('${esc(d.company_number)}')" class="text-blue-500 hover:text-blue-700 text-xs" title="Re-scrape this company">Re-scrape</button>
+                <button onclick="resetDealer('${esc(d.company_number)}')" class="text-navy hover:text-blue-800 text-xs" title="Reset to pending">Reset</button>
+                <button onclick="rescrapeDealer('${esc(d.company_number)}')" class="text-blue-500 hover:text-blue-700 text-xs" title="Re-scrape this company now">Re-scrape</button>
                 <button onclick="deleteDealer('${esc(d.company_number)}')" class="text-red-400 hover:text-red-600 text-xs">Remove</button>
             </td>
         </tr>`;
@@ -453,6 +458,7 @@ function updateSelectedUI() {
     const count = selectedCompanies.size;
     document.getElementById('selected-count').textContent = count;
     document.getElementById('btn-scrape-selected').classList.toggle('hidden', count === 0);
+    document.getElementById('btn-reset-selected').classList.toggle('hidden', count === 0);
 }
 
 async function scrapeSelected() {
@@ -483,6 +489,38 @@ async function rescrapeDealer(cn) {
         const data = await res.json();
         if (data.error) alert(data.error);
     } catch (e) { alert('Failed to start: ' + e.message); }
+}
+
+async function resetDealer(cn) {
+    try {
+        const res = await fetch('/api/reset-selected', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ company_numbers: [cn] }),
+        });
+        const data = await res.json();
+        if (data.error) { alert(data.error); return; }
+        loadDealers(currentPage);
+        refreshStats();
+    } catch (e) { alert('Failed to reset: ' + e.message); }
+}
+
+async function resetSelected() {
+    if (!selectedCompanies.size) return;
+    try {
+        const res = await fetch('/api/reset-selected', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ company_numbers: [...selectedCompanies] }),
+        });
+        const data = await res.json();
+        if (data.error) { alert(data.error); return; }
+        selectedCompanies.clear();
+        updateSelectedUI();
+        document.getElementById('select-all').checked = false;
+        loadDealers(currentPage);
+        refreshStats();
+    } catch (e) { alert('Failed to reset: ' + e.message); }
 }
 
 function esc(s) { if (!s) return ''; const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
