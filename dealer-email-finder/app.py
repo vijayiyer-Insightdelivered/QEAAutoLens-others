@@ -135,6 +135,19 @@ async def get_dealers(
     )
 
 
+@app.get("/api/dealers/all-numbers")
+async def get_all_company_numbers(
+    status: str = Query("all"),
+    search: str = Query(""),
+):
+    """Get all company numbers matching current filters (for select-all across pages)."""
+    numbers = storage.get_all_company_numbers(
+        status_filter=status if status != "all" else None,
+        search=search if search else None,
+    )
+    return {"company_numbers": numbers, "total": len(numbers)}
+
+
 @app.delete("/api/dealers/{company_number}")
 async def remove_dealer(company_number: str):
     storage.delete_dealer(company_number=company_number)

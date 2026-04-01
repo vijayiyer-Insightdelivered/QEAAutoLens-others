@@ -130,6 +130,36 @@ def reset_dealers_by_numbers(db_path=None, company_numbers=None):
     return affected
 
 
+def get_all_company_numbers(db_path=None, status_filter=None, search=None):
+    """Get all company numbers, optionally filtered by status and search term."""
+    db_path = db_path or config.DEFAULT_DB_PATH
+    conn = sqlite3.connect(db_path)
+    where_clauses = []
+    params = []
+    if status_filter and status_filter != 'all':
+        where_clauses.append("status = ?")
+        params.append(status_filter)
+    if search:
+        where_clauses.append("(company_name LIKE ? OR company_number LIKE ? OR emails_found LIKE ?)")
+        params.extend([f'%{search}%', f'%{search}%', f'%{search}%'])
+    where = f"WHERE {' AND '.join(where_clauses)}" if where_clauses else ""
+    cursor = conn.execute(f"SELECT company_number FROM dealers {where} ORDER BY id", params)
+    numbers = [row[0] for row in cursor.fetchall()]
+    conn.close()
+    return numbers
+
+
+def reset_all_dealers(db_path=None):
+    """Reset ALL dealers back to pending for re-scraping."""
+    db_path = db_path or config.DEFAULT_DB_PATH
+    conn = sqlite3.connect(db_path)
+    cursor = conn.execute("UPDATE dealers SET status = 'pending', error_message = NULL")
+    affected = cursor.rowcount
+    conn.commit()
+    conn.close()
+    return affected
+
+
 def update_dealer(db_path, company_number, **fields):
     db_path = db_path or config.DEFAULT_DB_PATH
     fields['updated_at'] = datetime.now().isoformat()

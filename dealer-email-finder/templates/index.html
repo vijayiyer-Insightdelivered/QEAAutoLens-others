@@ -225,6 +225,15 @@
                 </button>
             </div>
 
+            <!-- Select-all banner -->
+            <div id="select-all-banner" class="hidden bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 mb-4 flex items-center justify-between text-sm">
+                <span id="select-banner-text"></span>
+                <div class="flex gap-2">
+                    <button onclick="selectAllPages()" id="btn-select-all-pages" class="text-navy font-medium hover:underline">Select all <span id="select-all-total"></span> records</button>
+                    <button onclick="clearSelection()" class="text-gray-500 hover:text-gray-700">Clear selection</button>
+                </div>
+            </div>
+
             <!-- Dealers Table -->
             <div class="bg-white rounded-xl shadow-sm border overflow-hidden">
                 <div class="overflow-x-auto">
@@ -387,6 +396,7 @@ async function loadDealers(page) {
         const data = await res.json();
         renderTable(data.dealers);
         const total = data.total;
+        totalFilteredCount = total;
         const from = (page - 1) * data.per_page + 1;
         const to = Math.min(page * data.per_page, total);
         document.getElementById('page-info').textContent = total ? `Showing ${from}-${to} of ${total}` : 'No results';
@@ -396,6 +406,8 @@ async function loadDealers(page) {
 }
 
 let selectedCompanies = new Set();
+let allPagesSelected = false;
+let totalFilteredCount = 0;
 
 function renderTable(dealers) {
     const tbody = document.getElementById('dealers-table');
@@ -437,6 +449,7 @@ function renderTable(dealers) {
 }
 
 function toggleRowSelect(cb) {
+    allPagesSelected = false;
     if (cb.checked) {
         selectedCompanies.add(cb.dataset.cn);
     } else {
@@ -446,11 +459,51 @@ function toggleRowSelect(cb) {
 }
 
 function toggleSelectAll(cb) {
+    allPagesSelected = false;
     document.querySelectorAll('.row-select').forEach(box => {
         box.checked = cb.checked;
         if (cb.checked) selectedCompanies.add(box.dataset.cn);
         else selectedCompanies.delete(box.dataset.cn);
     });
+    updateSelectedUI();
+    // Show banner to select all pages if this page is fully selected and there are more records
+    const banner = document.getElementById('select-all-banner');
+    if (cb.checked && totalFilteredCount > 50) {
+        document.getElementById('select-banner-text').textContent =
+            `Selected ${selectedCompanies.size} records on this page.`;
+        document.getElementById('select-all-total').textContent = totalFilteredCount;
+        document.getElementById('btn-select-all-pages').classList.remove('hidden');
+        banner.classList.remove('hidden');
+    } else {
+        banner.classList.add('hidden');
+    }
+}
+
+async function selectAllPages() {
+    const status = document.getElementById('status-filter').value;
+    const search = document.getElementById('search-input').value;
+    const params = new URLSearchParams({ status, search });
+    try {
+        const res = await fetch('/api/dealers/all-numbers?' + params);
+        const data = await res.json();
+        selectedCompanies = new Set(data.company_numbers);
+        allPagesSelected = true;
+        // Update checkboxes on current page
+        document.querySelectorAll('.row-select').forEach(box => { box.checked = true; });
+        document.getElementById('select-all').checked = true;
+        document.getElementById('select-banner-text').textContent =
+            `All ${data.total} records selected across all pages.`;
+        document.getElementById('btn-select-all-pages').classList.add('hidden');
+        updateSelectedUI();
+    } catch (e) { alert('Failed to select all: ' + e.message); }
+}
+
+function clearSelection() {
+    selectedCompanies.clear();
+    allPagesSelected = false;
+    document.querySelectorAll('.row-select').forEach(box => { box.checked = false; });
+    document.getElementById('select-all').checked = false;
+    document.getElementById('select-all-banner').classList.add('hidden');
     updateSelectedUI();
 }
 
@@ -459,10 +512,17 @@ function updateSelectedUI() {
     document.getElementById('selected-count').textContent = count;
     document.getElementById('btn-scrape-selected').classList.toggle('hidden', count === 0);
     document.getElementById('btn-reset-selected').classList.toggle('hidden', count === 0);
+    if (count === 0) {
+        document.getElementById('select-all-banner').classList.add('hidden');
+    } else if (allPagesSelected) {
+        document.getElementById('select-all-banner').classList.remove('hidden');
+    }
 }
 
 async function scrapeSelected() {
     if (!selectedCompanies.size) return;
+    const count = selectedCompanies.size;
+    if (count > 50 && !confirm(`Re-scrape ${count} companies? This may take a while.`)) return;
     const industry = document.getElementById('industry').value.trim();
     try {
         const res = await fetch('/api/start', {
@@ -472,9 +532,7 @@ async function scrapeSelected() {
         });
         const data = await res.json();
         if (data.error) { alert(data.error); return; }
-        selectedCompanies.clear();
-        updateSelectedUI();
-        document.getElementById('select-all').checked = false;
+        clearSelection();
     } catch (e) { alert('Failed to start: ' + e.message); }
 }
 
@@ -507,6 +565,8 @@ async function resetDealer(cn) {
 
 async function resetSelected() {
     if (!selectedCompanies.size) return;
+    const count = selectedCompanies.size;
+    if (count > 50 && !confirm(`Reset ${count} companies to pending?`)) return;
     try {
         const res = await fetch('/api/reset-selected', {
             method: 'POST',
@@ -515,9 +575,7 @@ async function resetSelected() {
         });
         const data = await res.json();
         if (data.error) { alert(data.error); return; }
-        selectedCompanies.clear();
-        updateSelectedUI();
-        document.getElementById('select-all').checked = false;
+        clearSelection();
         loadDealers(currentPage);
         refreshStats();
     } catch (e) { alert('Failed to reset: ' + e.message); }
