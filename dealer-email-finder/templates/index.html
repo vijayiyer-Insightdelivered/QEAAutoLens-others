@@ -1,0 +1,603 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QEA AutoLens — Dealer Email Finder</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        navy: '#003366',
+                        accent: '#E86E29',
+                        'accent-light': '#F28C4E',
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        .drop-zone.drag-over { border-color: #E86E29; background: #FFF7ED; }
+        .tab-btn.active { border-bottom-color: #E86E29; color: #003366; font-weight: 600; }
+        .status-done { color: #059669; }
+        .status-error { color: #DC2626; }
+        .status-pending { color: #6B7280; }
+        .status-processing { color: #E86E29; }
+        .log-entry { animation: fadeIn 0.3s; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+        .animate-pulse-slow { animation: pulse 2s ease-in-out infinite; }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+
+    <!-- Header -->
+    <header class="bg-navy text-white shadow-lg">
+        <div class="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
+            <div>
+                <h1 class="text-2xl font-bold">QEA <span class="text-accent">AutoLens</span></h1>
+                <p class="text-sm text-gray-300">Dealer Email Finder</p>
+            </div>
+            <div id="engine-status" class="flex items-center gap-2 text-sm">
+                <span class="w-2.5 h-2.5 rounded-full bg-gray-400" id="status-dot"></span>
+                <span id="status-text">Idle</span>
+            </div>
+        </div>
+    </header>
+
+    <!-- Tabs -->
+    <div class="max-w-7xl mx-auto px-6 mt-6">
+        <div class="border-b border-gray-200 flex gap-0">
+            <button class="tab-btn active px-6 py-3 text-sm border-b-2 border-transparent hover:text-navy transition" onclick="switchTab('upload')" id="tab-upload">
+                Upload Excel
+            </button>
+            <button class="tab-btn px-6 py-3 text-sm border-b-2 border-transparent hover:text-navy transition" onclick="switchTab('manual')" id="tab-manual">
+                Add Dealer
+            </button>
+            <button class="tab-btn px-6 py-3 text-sm border-b-2 border-transparent hover:text-navy transition" onclick="switchTab('dashboard')" id="tab-dashboard">
+                Dashboard
+            </button>
+            <button class="tab-btn px-6 py-3 text-sm border-b-2 border-transparent hover:text-navy transition" onclick="switchTab('log')" id="tab-log">
+                Live Log
+            </button>
+        </div>
+    </div>
+
+    <!-- Content -->
+    <main class="max-w-7xl mx-auto px-6 py-6">
+
+        <!-- Upload Tab -->
+        <section id="panel-upload">
+            <div class="bg-white rounded-xl shadow-sm border p-8">
+                <h2 class="text-lg font-semibold text-navy mb-4">Import Dealers from Excel</h2>
+                <p class="text-sm text-gray-500 mb-6">Upload an Excel file with columns: Company Name, Company Number, Registered Address, Postcode, etc.</p>
+
+                <div id="drop-zone" class="drop-zone border-2 border-dashed border-gray-300 rounded-xl p-12 text-center cursor-pointer hover:border-accent transition">
+                    <svg class="mx-auto h-12 w-12 text-gray-400 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
+                    </svg>
+                    <p class="text-gray-600 font-medium">Drop Excel file here or click to browse</p>
+                    <p class="text-sm text-gray-400 mt-1">Supports .xlsx files</p>
+                    <input type="file" id="file-input" accept=".xlsx,.xls" class="hidden">
+                </div>
+
+                <div id="upload-result" class="mt-4 hidden">
+                    <div class="bg-green-50 border border-green-200 rounded-lg p-4 text-sm text-green-800">
+                        <span id="upload-message"></span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Manual Entry Tab -->
+        <section id="panel-manual" class="hidden">
+            <div class="bg-white rounded-xl shadow-sm border p-8">
+                <h2 class="text-lg font-semibold text-navy mb-4">Add Individual Dealer</h2>
+                <form id="add-form" class="space-y-4 max-w-lg">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Company Name *</label>
+                        <input type="text" name="company_name" required
+                            class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-accent focus:border-accent outline-none"
+                            placeholder="e.g. Smith Cars Ltd">
+                    </div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Company Number</label>
+                            <input type="text" name="company_number"
+                                class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-accent focus:border-accent outline-none"
+                                placeholder="e.g. 12345678">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Postcode</label>
+                            <input type="text" name="postcode"
+                                class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-accent focus:border-accent outline-none"
+                                placeholder="e.g. RG24 9QR">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Dealer Principal Name</label>
+                        <input type="text" name="dealer_principal"
+                            class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-accent focus:border-accent outline-none"
+                            placeholder="e.g. John Smith">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Companies House URL</label>
+                        <input type="url" name="companies_house_url"
+                            class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-accent focus:border-accent outline-none"
+                            placeholder="https://find-and-update.company-information.service.gov.uk/company/...">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Registered Address</label>
+                        <input type="text" name="registered_address"
+                            class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-accent focus:border-accent outline-none"
+                            placeholder="e.g. 10 High Street, Basingstoke">
+                    </div>
+                    <button type="submit"
+                        class="bg-accent hover:bg-accent-light text-white font-medium px-6 py-2.5 rounded-lg transition text-sm">
+                        Add Dealer
+                    </button>
+                </form>
+                <div id="add-result" class="mt-4 hidden">
+                    <div class="bg-green-50 border border-green-200 rounded-lg p-3 text-sm text-green-800" id="add-message"></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Dashboard Tab -->
+        <section id="panel-dashboard" class="hidden">
+            <!-- Stats Cards -->
+            <div class="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
+                <div class="bg-white rounded-xl shadow-sm border p-4">
+                    <p class="text-xs text-gray-500 uppercase tracking-wide">Total</p>
+                    <p class="text-2xl font-bold text-navy mt-1" id="stat-total">0</p>
+                </div>
+                <div class="bg-white rounded-xl shadow-sm border p-4">
+                    <p class="text-xs text-gray-500 uppercase tracking-wide">Pending</p>
+                    <p class="text-2xl font-bold text-gray-500 mt-1" id="stat-pending">0</p>
+                </div>
+                <div class="bg-white rounded-xl shadow-sm border p-4">
+                    <p class="text-xs text-gray-500 uppercase tracking-wide">Done</p>
+                    <p class="text-2xl font-bold text-green-600 mt-1" id="stat-done">0</p>
+                </div>
+                <div class="bg-white rounded-xl shadow-sm border p-4">
+                    <p class="text-xs text-gray-500 uppercase tracking-wide">With Emails</p>
+                    <p class="text-2xl font-bold text-accent mt-1" id="stat-emails">0</p>
+                </div>
+                <div class="bg-white rounded-xl shadow-sm border p-4">
+                    <p class="text-xs text-gray-500 uppercase tracking-wide">Errors</p>
+                    <p class="text-2xl font-bold text-red-500 mt-1" id="stat-errors">0</p>
+                </div>
+            </div>
+
+            <!-- Controls -->
+            <div class="bg-white rounded-xl shadow-sm border p-4 mb-6 flex flex-wrap items-center gap-4">
+                <div class="flex items-center gap-2">
+                    <label class="text-sm text-gray-600">Batch size:</label>
+                    <input type="number" id="batch-size" value="100" min="1" max="10000"
+                        class="w-24 border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-accent outline-none">
+                </div>
+                <div class="flex items-center gap-2">
+                    <label class="text-sm text-gray-600">Industry:</label>
+                    <input type="text" id="industry" placeholder="e.g. car dealer, plumber, accountant (optional)"
+                        class="w-64 border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-accent outline-none">
+                </div>
+                <button onclick="startScraping()" id="btn-start"
+                    class="bg-accent hover:bg-accent-light text-white font-medium px-5 py-2 rounded-lg transition text-sm">
+                    Start Scraping
+                </button>
+                <button onclick="scrapeSelected()" id="btn-scrape-selected"
+                    class="bg-navy hover:bg-blue-900 text-white font-medium px-5 py-2 rounded-lg transition text-sm hidden">
+                    Scrape Selected (<span id="selected-count">0</span>)
+                </button>
+                <button onclick="stopScraping()" id="btn-stop"
+                    class="bg-gray-500 hover:bg-gray-600 text-white font-medium px-5 py-2 rounded-lg transition text-sm hidden">
+                    Stop
+                </button>
+                <button onclick="resetDealers()"
+                    class="border border-gray-300 text-gray-600 hover:bg-gray-50 font-medium px-5 py-2 rounded-lg transition text-sm">
+                    Reset Errors
+                </button>
+                <a href="/api/export"
+                    class="border border-accent text-accent hover:bg-orange-50 font-medium px-5 py-2 rounded-lg transition text-sm ml-auto">
+                    Export Excel
+                </a>
+            </div>
+
+            <!-- Filter/Search -->
+            <div class="bg-white rounded-xl shadow-sm border p-4 mb-4 flex flex-wrap items-center gap-4">
+                <input type="text" id="search-input" placeholder="Search by name, number, or email..."
+                    class="flex-1 min-w-[200px] border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-accent outline-none">
+                <select id="status-filter" class="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-accent outline-none">
+                    <option value="all">All Statuses</option>
+                    <option value="pending">Pending</option>
+                    <option value="done">Done</option>
+                    <option value="error">Error</option>
+                    <option value="processing">Processing</option>
+                </select>
+                <button onclick="loadDealers(1)" class="bg-navy text-white px-4 py-2 rounded-lg text-sm hover:bg-blue-900 transition">
+                    Search
+                </button>
+            </div>
+
+            <!-- Dealers Table -->
+            <div class="bg-white rounded-xl shadow-sm border overflow-hidden">
+                <div class="overflow-x-auto">
+                    <table class="w-full text-sm">
+                        <thead class="bg-gray-50 border-b">
+                            <tr>
+                                <th class="px-3 py-3 w-8"><input type="checkbox" id="select-all" onchange="toggleSelectAll(this)" class="rounded"></th>
+                                <th class="text-left px-4 py-3 font-medium text-gray-600">Company</th>
+                                <th class="text-left px-4 py-3 font-medium text-gray-600">Postcode</th>
+                                <th class="text-left px-4 py-3 font-medium text-gray-600">Status</th>
+                                <th class="text-left px-4 py-3 font-medium text-gray-600">Website</th>
+                                <th class="text-left px-4 py-3 font-medium text-gray-600">Emails Found</th>
+                                <th class="text-left px-4 py-3 font-medium text-gray-600">Company Status</th>
+                                <th class="text-right px-4 py-3 font-medium text-gray-600">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="dealers-table" class="divide-y divide-gray-100">
+                            <tr><td colspan="8" class="px-4 py-8 text-center text-gray-400">No dealers loaded. Upload an Excel file or add dealers manually.</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+                <!-- Pagination -->
+                <div class="border-t px-4 py-3 flex items-center justify-between text-sm text-gray-500">
+                    <span id="page-info">Showing 0 of 0</span>
+                    <div class="flex gap-2">
+                        <button onclick="loadDealers(currentPage-1)" id="btn-prev"
+                            class="px-3 py-1 border rounded hover:bg-gray-50 disabled:opacity-40" disabled>Prev</button>
+                        <button onclick="loadDealers(currentPage+1)" id="btn-next"
+                            class="px-3 py-1 border rounded hover:bg-gray-50 disabled:opacity-40" disabled>Next</button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Live Log Tab -->
+        <section id="panel-log" class="hidden">
+            <div class="bg-white rounded-xl shadow-sm border p-4">
+                <div class="flex items-center justify-between mb-4">
+                    <h2 class="text-lg font-semibold text-navy">Live Scraping Log</h2>
+                    <button onclick="document.getElementById('log-container').innerHTML=''"
+                        class="text-xs text-gray-400 hover:text-gray-600">Clear</button>
+                </div>
+                <div id="log-container" class="bg-gray-900 text-gray-100 rounded-lg p-4 h-[500px] overflow-y-auto font-mono text-xs space-y-1">
+                    <p class="text-gray-500">Waiting for scraping to start...</p>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+<script>
+// --- State ---
+let currentPage = 1;
+let evtSource = null;
+
+// --- Tab Switching ---
+function switchTab(name) {
+    document.querySelectorAll('[id^="panel-"]').forEach(p => p.classList.add('hidden'));
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.getElementById('panel-' + name).classList.remove('hidden');
+    document.getElementById('tab-' + name).classList.add('active');
+    if (name === 'dashboard') { refreshStats(); loadDealers(1); }
+}
+
+// --- File Upload ---
+const dropZone = document.getElementById('drop-zone');
+const fileInput = document.getElementById('file-input');
+
+dropZone.addEventListener('click', () => fileInput.click());
+dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+dropZone.addEventListener('drop', (e) => {
+    e.preventDefault();
+    dropZone.classList.remove('drag-over');
+    if (e.dataTransfer.files.length) uploadFile(e.dataTransfer.files[0]);
+});
+fileInput.addEventListener('change', () => {
+    if (fileInput.files.length) uploadFile(fileInput.files[0]);
+});
+
+async function uploadFile(file) {
+    const fd = new FormData();
+    fd.append('file', file);
+    dropZone.innerHTML = '<p class="text-accent font-medium animate-pulse-slow">Uploading and importing...</p>';
+    try {
+        const res = await fetch('/api/upload', { method: 'POST', body: fd });
+        const data = await res.json();
+        if (data.error) throw new Error(data.error);
+        document.getElementById('upload-result').classList.remove('hidden');
+        document.getElementById('upload-message').textContent =
+            `Imported ${data.imported} dealers from ${data.filename}. Total: ${(data.stats.pending||0)+(data.stats.done||0)+(data.stats.error||0)} dealers in database.`;
+        dropZone.innerHTML = `<p class="text-green-600 font-medium">Uploaded: ${file.name}</p><p class="text-sm text-gray-400 mt-1">Drop another file to import more</p>`;
+    } catch (err) {
+        dropZone.innerHTML = `<p class="text-red-600 font-medium">Error: ${err.message}</p>`;
+    }
+}
+
+// --- Manual Add ---
+document.getElementById('add-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    const body = Object.fromEntries(fd);
+    try {
+        const res = await fetch('/api/add', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+        });
+        const data = await res.json();
+        if (data.error) throw new Error(data.error);
+        document.getElementById('add-result').classList.remove('hidden');
+        document.getElementById('add-message').textContent = data.message;
+        e.target.reset();
+    } catch (err) {
+        document.getElementById('add-result').classList.remove('hidden');
+        document.getElementById('add-message').textContent = 'Error: ' + err.message;
+        document.getElementById('add-message').parentElement.className = 'bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-800';
+    }
+});
+
+// --- Dashboard ---
+async function refreshStats() {
+    try {
+        const res = await fetch('/api/stats');
+        const s = await res.json();
+        const total = (s.pending||0) + (s.done||0) + (s.error||0) + (s.processing||0);
+        document.getElementById('stat-total').textContent = total;
+        document.getElementById('stat-pending').textContent = s.pending || 0;
+        document.getElementById('stat-done').textContent = s.done || 0;
+        document.getElementById('stat-emails').textContent = s.with_emails || 0;
+        document.getElementById('stat-errors').textContent = s.error || 0;
+        updateEngineStatus(s.engine_status, s.current_dealer);
+    } catch (e) {}
+}
+
+function updateEngineStatus(status, dealer) {
+    const dot = document.getElementById('status-dot');
+    const text = document.getElementById('status-text');
+    if (status === 'running') {
+        dot.className = 'w-2.5 h-2.5 rounded-full bg-green-400 animate-pulse-slow';
+        text.textContent = dealer ? `Scraping: ${dealer}` : 'Running...';
+        document.getElementById('btn-start').classList.add('hidden');
+        document.getElementById('btn-stop').classList.remove('hidden');
+    } else {
+        dot.className = 'w-2.5 h-2.5 rounded-full bg-gray-400';
+        text.textContent = 'Idle';
+        document.getElementById('btn-start').classList.remove('hidden');
+        document.getElementById('btn-stop').classList.add('hidden');
+    }
+}
+
+async function loadDealers(page) {
+    if (page < 1) return;
+    currentPage = page;
+    const search = document.getElementById('search-input').value;
+    const status = document.getElementById('status-filter').value;
+    const params = new URLSearchParams({ page, per_page: 50, status, search });
+    try {
+        const res = await fetch('/api/dealers?' + params);
+        const data = await res.json();
+        renderTable(data.dealers);
+        const total = data.total;
+        const from = (page - 1) * data.per_page + 1;
+        const to = Math.min(page * data.per_page, total);
+        document.getElementById('page-info').textContent = total ? `Showing ${from}-${to} of ${total}` : 'No results';
+        document.getElementById('btn-prev').disabled = page <= 1;
+        document.getElementById('btn-next').disabled = to >= total;
+    } catch (e) {}
+}
+
+let selectedCompanies = new Set();
+
+function renderTable(dealers) {
+    const tbody = document.getElementById('dealers-table');
+    if (!dealers.length) {
+        tbody.innerHTML = '<tr><td colspan="8" class="px-4 py-8 text-center text-gray-400">No dealers found.</td></tr>';
+        return;
+    }
+    tbody.innerHTML = dealers.map(d => {
+        const emails = Array.isArray(d.emails_found) ? d.emails_found : [];
+        const emailStr = emails.length
+            ? emails.map(e => `<span class="inline-block bg-orange-50 text-accent text-xs px-2 py-0.5 rounded mr-1 mb-1">${esc(e)}</span>`).join('')
+            : '<span class="text-gray-300">-</span>';
+        const website = d.website_url
+            ? `<a href="${esc(d.website_url)}" target="_blank" class="text-blue-600 hover:underline text-xs">${esc(d.website_url.replace(/^https?:\/\//, ''))}</a>`
+            : '<span class="text-gray-300">-</span>';
+        const checked = selectedCompanies.has(d.company_number) ? 'checked' : '';
+        return `<tr class="hover:bg-gray-50">
+            <td class="px-3 py-3"><input type="checkbox" class="row-select rounded" data-cn="${esc(d.company_number)}" ${checked} onchange="toggleRowSelect(this)"></td>
+            <td class="px-4 py-3">
+                <div class="font-medium text-navy">${esc(d.company_name)}</div>
+                <div class="text-xs text-gray-400">#${esc(d.company_number)}</div>
+            </td>
+            <td class="px-4 py-3 text-xs">${esc(d.postcode || '-')}</td>
+            <td class="px-4 py-3"><span class="status-${d.status} text-xs font-medium">${d.status}</span></td>
+            <td class="px-4 py-3">${website}</td>
+            <td class="px-4 py-3">${emailStr}</td>
+            <td class="px-4 py-3 text-xs">${esc(d.company_status || '-')}</td>
+            <td class="px-4 py-3 text-right space-x-2">
+                <button onclick="rescrapeDealer('${esc(d.company_number)}')" class="text-blue-500 hover:text-blue-700 text-xs" title="Re-scrape this company">Re-scrape</button>
+                <button onclick="deleteDealer('${esc(d.company_number)}')" class="text-red-400 hover:text-red-600 text-xs">Remove</button>
+            </td>
+        </tr>`;
+    }).join('');
+    // Sync select-all checkbox
+    const allBoxes = document.querySelectorAll('.row-select');
+    const allChecked = allBoxes.length > 0 && [...allBoxes].every(cb => cb.checked);
+    document.getElementById('select-all').checked = allChecked;
+}
+
+function toggleRowSelect(cb) {
+    if (cb.checked) {
+        selectedCompanies.add(cb.dataset.cn);
+    } else {
+        selectedCompanies.delete(cb.dataset.cn);
+    }
+    updateSelectedUI();
+}
+
+function toggleSelectAll(cb) {
+    document.querySelectorAll('.row-select').forEach(box => {
+        box.checked = cb.checked;
+        if (cb.checked) selectedCompanies.add(box.dataset.cn);
+        else selectedCompanies.delete(box.dataset.cn);
+    });
+    updateSelectedUI();
+}
+
+function updateSelectedUI() {
+    const count = selectedCompanies.size;
+    document.getElementById('selected-count').textContent = count;
+    document.getElementById('btn-scrape-selected').classList.toggle('hidden', count === 0);
+}
+
+async function scrapeSelected() {
+    if (!selectedCompanies.size) return;
+    const industry = document.getElementById('industry').value.trim();
+    try {
+        const res = await fetch('/api/start', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ company_numbers: [...selectedCompanies], industry }),
+        });
+        const data = await res.json();
+        if (data.error) { alert(data.error); return; }
+        selectedCompanies.clear();
+        updateSelectedUI();
+        document.getElementById('select-all').checked = false;
+    } catch (e) { alert('Failed to start: ' + e.message); }
+}
+
+async function rescrapeDealer(cn) {
+    const industry = document.getElementById('industry').value.trim();
+    try {
+        const res = await fetch('/api/start', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ company_numbers: [cn], industry }),
+        });
+        const data = await res.json();
+        if (data.error) alert(data.error);
+    } catch (e) { alert('Failed to start: ' + e.message); }
+}
+
+function esc(s) { if (!s) return ''; const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+async function startScraping() {
+    const batchSize = parseInt(document.getElementById('batch-size').value) || 100;
+    const industry = document.getElementById('industry').value.trim();
+    try {
+        const res = await fetch('/api/start', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ batch_size: batchSize, industry }),
+        });
+        const data = await res.json();
+        if (data.error) alert(data.error);
+    } catch (e) { alert('Failed to start: ' + e.message); }
+}
+
+async function stopScraping() {
+    await fetch('/api/stop', { method: 'POST' });
+}
+
+async function resetDealers() {
+    await fetch('/api/reset', { method: 'POST' });
+    refreshStats();
+    loadDealers(1);
+}
+
+async function deleteDealer(cn) {
+    await fetch('/api/dealers/' + cn, { method: 'DELETE' });
+    loadDealers(currentPage);
+    refreshStats();
+}
+
+// --- SSE ---
+function connectSSE() {
+    if (evtSource) evtSource.close();
+    evtSource = new EventSource('/api/events');
+    evtSource.onmessage = (e) => {
+        try {
+            const msg = JSON.parse(e.data);
+            handleEvent(msg);
+        } catch {}
+    };
+    evtSource.onerror = () => {
+        setTimeout(connectSSE, 3000);
+    };
+}
+
+function handleEvent(msg) {
+    const logEl = document.getElementById('log-container');
+
+    switch (msg.type) {
+        case 'status':
+            updateEngineStatus(msg.status);
+            refreshStats();
+            break;
+
+        case 'dealer_start':
+            appendLog(`[${msg.index}/${msg.total}] Scraping: ${msg.company_name} (#${msg.company_number})`, 'text-yellow-400');
+            updateEngineStatus('running', msg.company_name);
+            break;
+
+        case 'dealer_done': {
+            const emails = msg.emails_found || [];
+            const color = emails.length ? 'text-green-400' : 'text-gray-400';
+            const emailTxt = emails.length ? ` | Emails: ${emails.join(', ')}` : ' | No emails';
+            const webTxt = msg.website_url ? ` | ${msg.website_url}` : '';
+            appendLog(`[${msg.index}/${msg.total}] Done: ${msg.company_name}${webTxt}${emailTxt}`, color);
+            refreshStats();
+            // Auto-refresh table if on dashboard tab
+            if (!document.getElementById('panel-dashboard').classList.contains('hidden')) {
+                loadDealers(currentPage);
+            }
+            break;
+        }
+
+        case 'batch_done':
+            appendLog(`Batch complete! ${msg.stats?.with_emails || 0} dealers with emails.`, 'text-accent font-bold');
+            refreshStats();
+            if (!document.getElementById('panel-dashboard').classList.contains('hidden')) loadDealers(1);
+            break;
+
+        case 'log':
+            appendLog(msg.message, 'text-gray-300');
+            break;
+
+        case 'error':
+            appendLog(`ERROR: ${msg.message}`, 'text-red-400');
+            break;
+    }
+}
+
+function appendLog(text, classes = '') {
+    const logEl = document.getElementById('log-container');
+    const p = document.createElement('p');
+    p.className = `log-entry ${classes}`;
+    const time = new Date().toLocaleTimeString();
+    p.textContent = `[${time}] ${text}`;
+    logEl.appendChild(p);
+    logEl.scrollTop = logEl.scrollHeight;
+}
+
+// --- Init ---
+connectSSE();
+refreshStats();
+
+// Refresh stats periodically
+setInterval(refreshStats, 10000);
+
+// Enter key on search
+document.getElementById('search-input').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') loadDealers(1);
+});
+</script>
+
+</body>
+</html>

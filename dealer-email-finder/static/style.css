@@ -1,0 +1,4 @@
+/* Minimal overrides — Tailwind handles most styling via CDN */
+body {
+    font-family: 'Segoe UI', 'SF Pro Display', system-ui, sans-serif;
+}
