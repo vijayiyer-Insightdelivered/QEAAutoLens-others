@@ -152,6 +152,7 @@ def main():
     parser.add_argument('--verbose', '-v', action='store_true', help='Verbose logging')
     parser.add_argument('--stats', action='store_true', help='Show progress stats and exit')
     parser.add_argument('--companies', '-c', nargs='+', help='Specific company numbers to scrape (re-scrapes even if already done)')
+    parser.add_argument('--reset', nargs='+', metavar='COMPANY_NUMBER', help='Reset specific companies back to pending (so they get re-scraped in next batch)')
     args = parser.parse_args()
 
     # Ensure data directory exists
@@ -171,6 +172,13 @@ def main():
         storage.init_db(args.db)
         stats = storage.get_progress_stats(args.db)
         print(f"Progress: {stats}")
+        return
+
+    # Reset specific companies back to pending
+    if args.reset:
+        storage.init_db(args.db)
+        count = storage.reset_dealers_by_numbers(args.db, args.reset)
+        print(f"Reset {count} dealer(s) to pending")
         return
 
     # Initialize database

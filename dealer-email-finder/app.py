@@ -141,11 +141,25 @@ async def remove_dealer(company_number: str):
     return {"message": f"Deleted {company_number}"}
 
 
+class ResetSelectedRequest(BaseModel):
+    company_numbers: List[str]
+
+
 @app.post("/api/reset")
 async def reset_dealers():
     storage.reset_pending()
     stats = storage.get_progress_stats()
     return {"message": "Reset error/processing dealers to pending", "stats": stats}
+
+
+@app.post("/api/reset-selected")
+async def reset_selected(req: ResetSelectedRequest):
+    """Reset specific dealers back to pending so they can be re-scraped."""
+    if not req.company_numbers:
+        return {"error": "No companies specified"}
+    count = storage.reset_dealers_by_numbers(company_numbers=req.company_numbers)
+    stats = storage.get_progress_stats()
+    return {"message": f"Reset {count} dealers to pending", "count": count, "stats": stats}
 
 
 @app.post("/api/clear")
